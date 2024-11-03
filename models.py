@@ -1,28 +1,30 @@
+# models.py
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
-from beanie import Document, init_beanie
-from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
+class User:
+    def __init__(self, username, email, password):
+        self.user_id = None  # Add this line to track user ID
+        self.username = username
+        self.email = email
+        self.password = password  # Hash this
+        self.created_at = datetime.now()
+        self.last_active = datetime.now()
+        self.bio = ""
+        self.profile_picture = ""
+        self.followers = []
+        self.following = []
+        self.is_active = True
 
-class Tweet(Document):  # Inherit from Document
-    id: ObjectId = None
-    content: str
-    created_at: datetime = None  # Will be set in the constructor
-    author_id: str = "default_author"
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        if self.created_at is None:
-            self.created_at = datetime.now()  # Set current time if not provided
-
-
-class User(Document):  # Inherit from Document
-    username: str
-    email: EmailStr
-    hashed_password: str
-    created_at: datetime = datetime.now()
-
-
-class UserInDB(User):
-    id: str
+class Tweet:
+    def __init__(self, user_id, content):
+        self.user_id = user_id  # This will be an ObjectId
+        self.content = content
+        self.created_at = datetime.now()
+        self.likes = []
+        self.retweets = []
+        self.comments = []
+        self.media = []
+        self.hashtags = []
+        self.mentions = []
+        self.visibility = "public"
