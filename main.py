@@ -24,7 +24,6 @@ class TwitterCloneApp:
         tk.Label(self.main_frame, text="Welcome to Twitter Clone!").grid(
             row=0, columnspan=2
         )
-
         tk.Button(
             self.main_frame, text="Register", command=self.open_register_window
         ).grid(row=1, column=0)
@@ -71,17 +70,17 @@ class TwitterCloneApp:
     def register_user(self):
         username = self.username_entry.get()
         email = self.email_entry.get()
-        password = self.password_entry.get()  # Make sure to hash this
+        password = self.password_entry.get()
 
         if username and email and password:
             new_user = User(username=username, email=email, password=password)
             user_id = save_user(new_user)
-            new_user.user_id = user_id  # Store the returned ObjectId in the User object
+            new_user.user_id = user_id
             messagebox.showinfo("Success", "User registered successfully!")
             self.username_entry.delete(0, tk.END)
             self.email_entry.delete(0, tk.END)
             self.password_entry.delete(0, tk.END)
-            self.register_window.destroy()  # Close register window
+            self.register_window.destroy()
         else:
             messagebox.showwarning("Warning", "Please fill in all fields.")
 
@@ -89,41 +88,46 @@ class TwitterCloneApp:
         username = self.login_username_entry.get()
         password = self.login_password_entry.get()
 
-        # Check for user in the database (you'll want to hash the password for this check)
-        user = users_collection.find_one(
-            {"username": username, "password": password}
-        )  # Hash check needed
+        user = users_collection.find_one({"username": username, "password": password})
 
         if user:
-            self.current_user_id = user["_id"]  # Store ObjectId of the logged-in user
-            self.current_username = user["username"]  # Store the username
+            self.current_user_id = user["_id"]
+            self.current_username = user["username"]
             messagebox.showinfo("Success", "Logged in successfully!")
-            self.login_window.destroy()  # Close login window
-            self.open_tweet_window()  # Open tweet window
+            self.login_window.destroy()
+            self.open_tweet_window()
         else:
             messagebox.showwarning("Warning", "Invalid username or password.")
 
     def open_tweet_window(self):
+        # Close the existing tweet window if it exists
+        if hasattr(self, 'tweet_window') and self.tweet_window.winfo_exists():
+            self.tweet_window.destroy()
+
         self.tweet_window = tk.Toplevel(self.root)
         self.tweet_window.title("Tweet Window")
 
+        # Create the Refresh Button
+        self.refresh_button = tk.Button(
+            self.tweet_window, text="Refresh", command=self.open_tweet_window
+        )
+        self.refresh_button.pack(pady=10)
+
+        # Create the Post Tweet Button
         tk.Button(
             self.tweet_window, text="Post Tweet", command=self.open_post_tweet_window
         ).pack(pady=10)
 
-        # Create a Treeview for displaying tweets
-        self.tweets_tree = ttk.Treeview(
-            self.tweet_window,
-            columns=("Content", "User", "Likes", "Retweets"),
-            show="headings",
-        )
-        self.tweets_tree.heading("Content", text="Tweet Content")
-        self.tweets_tree.heading("User", text="User")
-        self.tweets_tree.heading("Likes", text="Likes")
-        self.tweets_tree.heading("Retweets", text="Retweets")
-        self.tweets_tree.pack(pady=10, fill="both", expand=True)
+        # Frame for displaying tweets
+        self.tweets_frame = tk.Frame(self.tweet_window)
+        self.tweets_frame.pack(pady=10)
 
+        # Load tweets initially
         self.load_tweets()
+
+    def refresh_tweets(self):
+        """Reloads the tweets by reopening the tweet window."""
+        self.open_tweet_window()
 
     def open_post_tweet_window(self):
         self.post_tweet_window = tk.Toplevel(self.tweet_window)
@@ -133,25 +137,69 @@ class TwitterCloneApp:
         self.tweet_content_entry = tk.Entry(self.post_tweet_window, width=50)
         self.tweet_content_entry.grid(row=0, column=1)
 
-        tk.Button(self.post_tweet_window, text="Submit", command=self.post_tweet).grid(
-            row=1, columnspan=2
+        tk.Label(self.post_tweet_window, text="Hashtags (comma separated)").grid(
+            row=1, column=0
         )
+        self.hashtags_entry = tk.Entry(self.post_tweet_window, width=50)
+        self.hashtags_entry.grid(row=1, column=1)
+
+        tk.Label(self.post_tweet_window, text="Mentions").grid(row=2, column=0)
+        self.mentions_var = tk.StringVar()
+        self.mentions_dropdown = ttk.Combobox(
+            self.post_tweet_window, textvariable=self.mentions_var
+        )
+        self.mentions_dropdown["values"] = (
+            self.get_usernames()
+        )  # Populate with usernames
+        self.mentions_dropdown.grid(row=2, column=1)
+
+        self.private_var = tk.BooleanVar()
+        self.private_checkbox = tk.Checkbutton(
+            self.post_tweet_window, text="Private Post", variable=self.private_var
+        )
+        self.private_checkbox.grid(row=3, columnspan=2)
+
+        tk.Button(self.post_tweet_window, text="Submit", command=self.post_tweet).grid(
+            row=4, columnspan=2
+        )
+
+    def get_usernames(self):
+        # Fetch all usernames from the database
+        users = users_collection.find()
+        return [user["username"] for user in users]
 
     def post_tweet(self):
         content = self.tweet_content_entry.get()
+        hashtags = (
+            self.hashtags_entry.get().split(",") if self.hashtags_entry.get() else []
+        )
+        mentions = self.mentions_var.get()
+        is_private = self.private_var.get()
+
         if content and self.current_user_id:
-            new_tweet = Tweet(user_id=self.current_user_id, content=content)
+            new_tweet = Tweet(
+                user_id=self.current_user_id,
+                content=content,
+                hashtags=[tag.strip() for tag in hashtags],  # Clean up whitespace
+                mentions=mentions,
+                visibility="private"
+                if is_private
+                else "public",  # Set visibility based on checkbox
+            )
             save_tweet(new_tweet)
             messagebox.showinfo("Success", "Tweet posted successfully!")
             self.tweet_content_entry.delete(0, tk.END)
+            self.hashtags_entry.delete(0, tk.END)
+            self.mentions_var.set("")
             self.load_tweets()
-            self.post_tweet_window.destroy()  # Close the post tweet window
+            self.post_tweet_window.destroy()
         else:
             messagebox.showwarning("Warning", "Please enter a tweet.")
 
     def load_tweets(self):
-        for row in self.tweets_tree.get_children():
-            self.tweets_tree.delete(row)  # Clear existing rows
+        # Clear the tweets_frame
+        for widget in self.tweets_frame.winfo_children():
+            widget.destroy()
 
         tweets = get_all_tweets()
         for tweet in tweets:
@@ -161,23 +209,23 @@ class TwitterCloneApp:
             like_count = len(tweet["likes"])
             retweet_count = len(tweet["retweets"])
 
-            # Insert tweet data into the Treeview
-            self.tweets_tree.insert(
-                "",
-                "end",
-                values=(tweet["content"], username, like_count, retweet_count),
+            tweet_label = tk.Label(
+                self.tweets_frame,
+                text=f"{username}: {tweet['content']} - Likes: {like_count} - Retweets: {retweet_count}",
             )
+            tweet_label.pack(anchor="w")
 
-        # Add an "Interact More" button for each tweet
-        for tweet in tweets:
             interact_button = tk.Button(
-                self.tweets_tree,
+                self.tweets_frame,
                 text="Interact More",
                 command=lambda t=tweet: self.open_interact_window(t),
             )
-            self.tweets_tree.insert(
-                "", "end", values=(interact_button,)
-            )  # Add button to the Treeview
+            interact_button.pack(
+                anchor="w", pady=(0, 10)
+            )  # Add some space after each button
+
+    def refresh_tweets(self):
+        self.load_tweets()
 
     def open_interact_window(self, tweet):
         self.interact_window = tk.Toplevel(self.tweet_window)
@@ -185,14 +233,38 @@ class TwitterCloneApp:
 
         tk.Label(self.interact_window, text=f"Tweet: {tweet['content']}").pack(pady=10)
 
+        tk.Label(self.interact_window, text=f"Likes: {len(tweet['likes'])}").pack(
+            pady=10
+        )
+
         tk.Button(
             self.interact_window, text="Like", command=lambda: self.like_tweet(tweet)
         ).pack(pady=5)
+
+        tk.Label(self.interact_window, text=f"Retweets: {len(tweet['retweets'])}").pack(
+            pady=10
+        )
+
         tk.Button(
             self.interact_window, text="Retweet", command=lambda: self.retweet(tweet)
         ).pack(pady=5)
 
-        tk.Label(self.interact_window, text="Comment").pack(pady=5)
+        tk.Label(self.interact_window, text=f"Hashtags: {(tweet['hashtags'])}").pack(
+            pady=10
+        )
+
+        tk.Label(self.interact_window, text=f"Comments: {len(tweet['comments'])}").pack(
+            pady=10
+        )
+
+        tk.Label(self.interact_window, text="Comments:").pack(pady=5)
+
+        # Display comments
+        self.comment_listbox = tk.Listbox(self.interact_window, width=50, height=10)
+        self.comment_listbox.pack(pady=5)
+        self.load_comments(tweet)
+
+        tk.Label(self.interact_window, text="Add Comment:").pack(pady=5)
         self.comment_entry = tk.Entry(self.interact_window, width=50)
         self.comment_entry.pack(pady=5)
         tk.Button(
@@ -200,6 +272,13 @@ class TwitterCloneApp:
             text="Submit Comment",
             command=lambda: self.comment_tweet(tweet),
         ).pack(pady=5)
+
+    def load_comments(self, tweet):
+        self.comment_listbox.delete(0, tk.END)
+        for comment in tweet.get("comments", []):
+            user = users_collection.find_one({"_id": comment["user_id"]})
+            username = user["username"] if user else "Unknown User"
+            self.comment_listbox.insert(tk.END, f"{username}: {comment['content']}")
 
     def like_tweet(self, tweet):
         if self.current_user_id not in tweet["likes"]:
@@ -210,7 +289,7 @@ class TwitterCloneApp:
             messagebox.showinfo("Success", "Tweet liked!")
         else:
             messagebox.showwarning("Warning", "You have already liked this tweet.")
-        self.load_tweets()  # Refresh the tweet list
+        self.load_tweets()
 
     def retweet(self, tweet):
         if self.current_user_id not in tweet["retweets"]:
@@ -225,24 +304,21 @@ class TwitterCloneApp:
             messagebox.showinfo("Success", "Tweet retweeted!")
         else:
             messagebox.showwarning("Warning", "You have already retweeted this tweet.")
-        self.load_tweets()  # Refresh the tweet list
+        self.load_tweets()
 
     def comment_tweet(self, tweet):
         comment_content = self.comment_entry.get()
         if comment_content and self.current_user_id:
             comment = {"user_id": self.current_user_id, "content": comment_content}
-            tweet["comments"].append(comment)
+            tweet.setdefault("comments", []).append(comment)
             tweets_collection.update_one(
                 {"_id": tweet["_id"]}, {"$set": {"comments": tweet["comments"]}}
             )
             messagebox.showinfo("Success", "Comment added!")
             self.comment_entry.delete(0, tk.END)
-            self.load_tweets()  # Refresh the tweet list
+            self.load_comments(tweet)
         else:
             messagebox.showwarning("Warning", "Please enter a comment.")
-
-    def get_tweet_by_content(self, content):
-        return tweets_collection.find_one({"content": content})
 
 
 if __name__ == "__main__":
