@@ -1,13 +1,11 @@
 # database.py
 from pymongo import MongoClient
-from models import User, Tweet
-from datetime import datetime
-from bson import ObjectId
+from decouple import config
 
-client = MongoClient('mongodb://localhost:27017/')
-db = client['t_clone']
-users_collection = db['users']
-tweets_collection = db['tweets']
+client = MongoClient(config('DB_Config'))
+db = client[config('DB')]
+users_collection = db['Users']
+tweets_collection = db['Tweets']
 
 def save_user(user):
     user_data = {
