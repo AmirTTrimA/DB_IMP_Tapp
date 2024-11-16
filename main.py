@@ -1,4 +1,5 @@
 import tkinter as tk
+from datetime import datetime
 from tkinter import messagebox, ttk
 from database import (
     save_user,
@@ -98,6 +99,7 @@ class TwitterCloneApp:
             self.current_user_id = user["_id"]
             self.current_username = user["username"]
             self.current_user = user
+            user["last_active"] = datetime.now()
             messagebox.showinfo("Success", "Logged in successfully!")
             self.login_window.destroy()
             self.open_tweet_window()
@@ -584,19 +586,36 @@ class TwitterCloneApp:
         self.toggle_edit()  # Disable editing after saving
 
     def toggle_follow(self, user_id):
-        # Implement follow/unfollow logic here
-        if user_id in self.current_user.following:
-            self.current_user.following.remove(user_id)
+        # Get the current user's following list
+        following_list = self.current_user.get("following", [])
+        
+        if user_id in following_list:
+            # Unfollow logic
+            following_list.remove(user_id)
             messagebox.showinfo("Success", "Unfollowed user.")
+            
+            # Remove current user from the followed user's followers list
+            users_collection.update_one(
+                {"_id": user_id},
+                {"$pull": {"followers": self.current_user_id}}  # Remove current user from followers
+            )
         else:
-            self.current_user.following.append(user_id)
+            # Follow logic
+            following_list.append(user_id)
             messagebox.showinfo("Success", "Followed user.")
+            
+            # Add current user to the followed user's followers list
+            users_collection.update_one(
+                {"_id": user_id},
+                {"$addToSet": {"followers": self.current_user_id}}  # Add current user to followers
+            )
 
-        # Update the user in the database
+        # Update the current user in the database
         users_collection.update_one(
             {"_id": self.current_user_id},
-            {"$set": {"following": self.current_user.following}},
+            {"$set": {"following": following_list}}  # Update following list
         )
+
 
     def count_user_posts(self, user_id):
         return tweets_collection.count_documents({"user_id": user_id})
