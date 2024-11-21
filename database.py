@@ -1,11 +1,22 @@
 # database.py
 from pymongo import MongoClient
-from decouple import config
+from dotenv import load_dotenv
+import os
 
-client = MongoClient(config('DB_Config'))
-db = client[config('DB')]
+os.environ.pop('DB_Config', None)
+os.environ.pop('DB', None)
+
+load_dotenv()  # Load environment variables from .env file
+
+client = MongoClient(os.getenv('DB_Config'))
+print(os.getenv('DB_Config'))
+# client = MongoClient(config('DB_Config_local'))
+db = client[os.getenv('DB')]
+# db = client[config('DB_local')]
 users_collection = db['Users']
+# users_collection = db['users']
 tweets_collection = db['Tweets']
+# tweets_collection = db['tweets']
 
 def save_user(user):
     user_data = {
